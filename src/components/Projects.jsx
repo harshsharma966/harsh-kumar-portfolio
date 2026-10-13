@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { projectsData } from '../data/portfolioData';
 import ProjectModal from './ProjectModal';
-import { ExternalLink, Layers, ArrowRight, Activity, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, Layers, ArrowRight, Activity, Sparkles, CheckCircle2, Play } from 'lucide-react';
 
 export default function Projects() {
   const [selectedProject, setSelectedProject] = useState(null);
@@ -79,6 +79,14 @@ export default function Projects() {
                     {project.status}
                   </span>
                 </div>
+
+                {/* Video Demo Badge */}
+                {project.demoVideo && (
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/70 backdrop-blur-sm text-white text-[11px] font-mono font-semibold shadow-lg group-hover:bg-violet-600/90 transition-colors duration-300">
+                    <Play className="w-3 h-3 fill-current" />
+                    Watch Demo
+                  </div>
+                )}
               </div>
 
               {/* Card Content Area */}

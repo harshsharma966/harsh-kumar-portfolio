@@ -1,7 +1,31 @@
-import React, { useEffect } from 'react';
-import { X, ExternalLink, Activity, CheckCircle2, Cpu, Database, Server, GitBranch, ArrowRight, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, ExternalLink, Activity, CheckCircle2, Cpu, Database, Server, GitBranch, ArrowRight, ShieldCheck, Play, Pause, Volume2, VolumeX, Maximize, Film } from 'lucide-react';
 
 export default function ProjectModal({ project, onClose }) {
+  const videoRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [videoError, setVideoError] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeout = useRef(null);
+
+  // Reset video state when selected project changes
+  useEffect(() => {
+    setIsPlaying(false);
+    setVideoProgress(0);
+    setCurrentTime(0);
+    setVideoDuration(0);
+    setVideoError(false);
+    setShowControls(true);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  }, [project?.id, project?.demoVideo]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
@@ -15,6 +39,69 @@ export default function ProjectModal({ project, onClose }) {
   }, [onClose]);
 
   if (!project) return null;
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const toggleMute = () => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
+  };
+
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return;
+    const progress = (videoRef.current.currentTime / videoRef.current.duration) * 100;
+    setVideoProgress(progress);
+    setCurrentTime(videoRef.current.currentTime);
+  };
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setVideoDuration(videoRef.current.duration);
+    }
+  };
+
+  const handleProgressClick = (e) => {
+    if (!videoRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    videoRef.current.currentTime = pos * videoRef.current.duration;
+  };
+
+  const handleFullscreen = () => {
+    if (videoRef.current) {
+      if (videoRef.current.requestFullscreen) {
+        videoRef.current.requestFullscreen();
+      } else if (videoRef.current.webkitRequestFullscreen) {
+        videoRef.current.webkitRequestFullscreen();
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleMouseMove = () => {
+    setShowControls(true);
+    clearTimeout(controlsTimeout.current);
+    if (isPlaying) {
+      controlsTimeout.current = setTimeout(() => setShowControls(false), 3000);
+    }
+  };
+
+  const hasDemoVideo = Boolean(project.demoVideo && !videoError);
 
   return (
     <div className="modal-overlay animate-fade-in" onClick={onClose}>
@@ -41,6 +128,12 @@ export default function ProjectModal({ project, onClose }) {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               {project.status}
             </span>
+            {hasDemoVideo && (
+              <span className="px-3 py-1 rounded-full text-xs font-mono font-semibold bg-violet-50 text-violet-700 border border-violet-200 flex items-center gap-1.5">
+                <Film className="w-3 h-3" />
+                Video Demo
+              </span>
+            )}
           </div>
           
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
@@ -65,6 +158,110 @@ export default function ProjectModal({ project, onClose }) {
             </div>
           </div>
         )}
+
+        {/* ===== VIDEO PLAYER SECTION ===== */}
+        {hasDemoVideo && (
+          <div className="my-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center">
+                  <Film className="w-4 h-4 text-white" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">
+                  Project Demo Video
+                </h3>
+              </div>
+            </div>
+            
+            <div 
+              className="relative rounded-2xl overflow-hidden border border-slate-200 bg-black group/video cursor-pointer"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => isPlaying && setShowControls(false)}
+            >
+              <video
+                ref={videoRef}
+                src={project.demoVideo}
+                className="w-full max-h-[480px] object-contain mx-auto"
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onError={() => setVideoError(true)}
+                onEnded={() => setIsPlaying(false)}
+                onClick={togglePlay}
+                playsInline
+                preload="metadata"
+              />
+
+              {/* Big center play button (shown when paused) */}
+              {!isPlaying && (
+                <div 
+                  className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-300"
+                  onClick={togglePlay}
+                >
+                  <div className="w-20 h-20 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-2xl hover:scale-110 transition-transform duration-200 group/play">
+                    <Play className="w-8 h-8 text-slate-900 ml-1" />
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom controls bar */}
+              <div 
+                className={`absolute bottom-0 left-0 right-0 transition-opacity duration-300 ${
+                  showControls || !isPlaying ? 'opacity-100' : 'opacity-0'
+                }`}
+                style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}
+              >
+                {/* Progress bar */}
+                <div 
+                  className="h-1.5 mx-4 mt-4 bg-white/20 rounded-full cursor-pointer group/progress hover:h-2.5 transition-all"
+                  onClick={handleProgressClick}
+                >
+                  <div 
+                    className="h-full bg-gradient-to-r from-violet-400 to-blue-500 rounded-full relative transition-all"
+                    style={{ width: `${videoProgress}%` }}
+                  >
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-lg opacity-0 group-hover/progress:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+
+                {/* Control buttons */}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                      className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      {isPlaying ? (
+                        <Pause className="w-4 h-4 text-white" />
+                      ) : (
+                        <Play className="w-4 h-4 text-white ml-0.5" />
+                      )}
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+                      className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      {isMuted ? (
+                        <VolumeX className="w-4 h-4 text-white" />
+                      ) : (
+                        <Volume2 className="w-4 h-4 text-white" />
+                      )}
+                    </button>
+                    <span className="text-white/80 text-xs font-mono">
+                      {formatTime(currentTime)} / {formatTime(videoDuration)}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleFullscreen(); }}
+                    className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <Maximize className="w-4 h-4 text-white" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ===== END VIDEO PLAYER ===== */}
 
         {/* Verified Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-6">
